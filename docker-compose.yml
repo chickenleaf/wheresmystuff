@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  app:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongodb
+      - elasticsearch
+      - rabbitmq
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672//
+    volumes:
+      - ./backend:/app
+
+  mongodb:
+    image: mongo:4.4
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  celery_worker:
+    build: ./backend
+    command: celery -A app.services.celery_tasks worker --loglevel=info
+    depends_on:
+      - app
+      - rabbitmq
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.14.0
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.14.0
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+
+volumes:
+  mongodb_data:
+  elasticsearch_data:
